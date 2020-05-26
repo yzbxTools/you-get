@@ -3,6 +3,12 @@
 
 __all__ = ['baidu_download']
 
+import warnings
+from bs4 import BeautifulSoup
+from urllib import parse,request
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+import time
 from ..common import *
 from .embed import *
 from .universal import *
@@ -101,9 +107,47 @@ def baidu_download_album(aid, output_dir='.', merge=True, info_only=False):
 
         track_nr += 1
 
+def baidu_download_picture(url):
+    def get_html(url):
+        options = webdriver.FirefoxOptions()
+        options.set_headless()
+        # start web browser
+        browser=webdriver.Firefox(options=options)
+        # get source code
+        browser.get(url)
+        
+        # 按5次PAGE_DWON键，缓存5页的图像
+        for i in range(5):
+            webdriver.ActionChains(browser).send_keys(Keys.PAGE_DOWN).perform()
+            time.sleep(1)
+        html = browser.page_source
+        # close web browser
+        browser.close()
+        return html
+        
+    def parse_html(url,name,attrs):
+        html_doc=get_html(url)
+        soup = BeautifulSoup(html_doc,                      #HTML文档字符串
+                             'html.parser',                  #HTML解析器
+                             from_encoding = 'utf-8'         #HTML文档编码 
+                              )
+        
+        links=soup.find_all(name,attrs=attrs)
+            
+        if len(links) == 0:
+            warnings.warn('#cannot find target link '+'*'*30)
+            return ''
+        else:
+            return links
+    img_reg='(.*)\.(jpg|bmp|gif|ico|pcx|jpeg|tif|png|raw|tga)'
+    attrs={'data-imgurl':re.compile(img_reg)}
+    links=parse_html(url,'img',attrs)
+    links=[l['data-imgurl'] for l in links]
+    return links
+    
 
 def baidu_download(url, output_dir='.', stream_type=None, merge=True, info_only=False, **kwargs):
-
+    warnings.warn('url is %s'%url)
     if re.match(r'https?://pan.baidu.com', url):
         real_url, title, ext, size = baidu_pan_download(url)
         print_info('BaiduPan', title, ext, size)
@@ -112,6 +156,21 @@ def baidu_download(url, output_dir='.', stream_type=None, merge=True, info_only=
             time.sleep(5)
             download_urls([real_url], title, ext, size,
                           output_dir, url, merge=merge, faker=True)
+            
+    elif re.match(r'https?://pic.baidu.com',url):
+        real_urls=baidu_download_picture(url)
+        for link in real_urls:
+            print(link)
+            type, ext, size = url_info(link, faker=True)
+            print(type,ext,size)
+            html = get_html(link)
+            title = r1(r'title:"([^"]+)"', html)
+            title=str(time.time()) if title is None else title
+            print_info('pic.baidu.com', title, ext, size)
+            if not info_only:
+                download_urls([link], title, ext, size,
+                              output_dir, url, merge=merge, faker=True)
+            
     elif re.match(r'https?://music.baidu.com/album/\d+', url):
         id = r1(r'https?://music.baidu.com/album/(\d+)', url)
         baidu_download_album(id, output_dir, merge, info_only)
@@ -131,6 +190,7 @@ def baidu_download(url, output_dir='.', stream_type=None, merge=True, info_only=
 
             vhsrc = re.findall(r'"BDE_Image"[^>]+src="([^"]+\.mp4)"', html) or \
                 re.findall(r'vhsrc="([^"]+)"', html)
+                
             if len(vhsrc) > 0:
                 ext = 'mp4'
                 size = url_size(vhsrc[0])
