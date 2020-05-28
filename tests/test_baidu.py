@@ -1,74 +1,47 @@
-# -*- coding: utf-8 -*-
-
 import unittest
-from bs4 import BeautifulSoup
-from urllib import parse,request
 import re
-import time
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urlparse
 import os
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support.expected_conditions import presence_of_element_located
 
 class BaiduTests(unittest.TestCase):
-    def test_selenium(self):
-        def get_links(html):
+    def test_baidu(self):
+        def get_original_image(html):
             soup = BeautifulSoup(html,                      #HTML文档字符串
-                             'html.parser',                  #HTML解析器
-                             from_encoding = 'utf-8'         #HTML文档编码 
-                              )
+                                 'html.parser',                  #HTML解析器 
+                                  )
             img_reg='(.*)\.(jpg|bmp|gif|ico|pcx|jpeg|tif|png|raw|tga)'
-            links=soup.find_all('img',attrs={'data-imgurl':re.compile(img_reg)})
+            links=soup.find_all('a',class_='down')
             return links
+    
+        keyword='cat'
+        url = 'https://image.baidu.com/search/flip?tn=baiduimage&ie=utf-8&word='+keyword+'&ct=201326592&v=flip&height=800&width=1280'
+        result = requests.get(url)
+        html = result.text
+        print(html)
+        #links=get_original_image(html)
+        #pic_url=['https://image.baidu.com/'+l.href for l in links]
+        pic_url = re.findall('"objURL":"(.*?)",',html,re.S)
+        i = 0
         
-        url="https://pic.baidu.com/search/index?tn=baiduimage&ipn=r&ct=201326592&cl=2&lm=-1&st=-1&fm=index&fr=&hs=0&xthttps=111111&sf=1&fmq=&pv=&ic=0&nc=1&z=&se=1&showtab=0&fb=0&width=&height=&face=0&istype=2&ie=utf-8&word=%E9%9C%B2%E7%8F%A0&f=3&oq=luzhu&rsp=1"
+        self.assertTrue(len(pic_url)>5)
+        for each in pic_url:
+            print(pic_url)
         
-        fireFoxOptions = webdriver.FirefoxOptions()
-        fireFoxOptions.set_headless()
-        
-        executable_path=os.path.join(os.getcwd(),'bin')
-        print(executable_path)
-        #This example requires Selenium WebDriver 3.13 or newer
-        with webdriver.Firefox(options=fireFoxOptions) as driver:
-            #driver.get("https://pic.baidu.com")
-            #obj=driver.find_element(By.CSS_SELECTOR, "#kw")
-            #obj.send_keys("露珠" + Keys.RETURN)
+            try:
+                pic= requests.get(each, timeout=10)
+            except requests.exceptions.ConnectionError:
+                print ('exception')
+                continue
+    
+            string = 'pictures'+keyword+'_'+str(i) + '.jpg'
+            fp = open(string,'wb')
+            fp.write(pic.content)
+            fp.close()
+            i += 1
             
-            driver.get(url)
-            html=driver.page_source
-            old_n=len(get_links(html))
-            self.assertTrue(old_n>=0)
-            for i in range(5):
-                webdriver.ActionChains(driver).send_keys(Keys.PAGE_DOWN).perform()
-                time.sleep(1)
-                html=driver.page_source
-                new_n=len(get_links(html))
-                self.assertTrue(new_n>=old_n)
-                old_n=new_n
-                print(new_n,old_n)
-            
-            
-        # start web browser
-        browser=webdriver.Firefox(options=fireFoxOptions)
-        
-        # get source code
-        
-        browser.get(url)
-        html = browser.page_source
-        self.assertTrue(html.find('data-imgurl')>=0)
-        
-        # close web browser
-        browser.close()
-        links=get_links(html)
-        print(len(links))
-        self.assertTrue(len(links)>0)
-        
-        links=soup.find_all('a',attrs={'class':'down','href':re.compile(img_reg)})
-        print(len(links))
-        self.assertTrue(len(links)>0)
-        
+        self.assertTrue(i>0)
         
 if __name__ == '__main__':
     unittest.main()

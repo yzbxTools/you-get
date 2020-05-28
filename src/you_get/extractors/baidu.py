@@ -108,40 +108,48 @@ def baidu_download_album(aid, output_dir='.', merge=True, info_only=False):
         track_nr += 1
 
 def baidu_download_picture(url):
+    def get_thumbnail_links(html):
+            soup = BeautifulSoup(html,                      #HTML文档字符串
+                             'html.parser',                  #HTML解析器 
+                              )
+        img_reg='(.*)\.(jpg|bmp|gif|ico|pcx|jpeg|tif|png|raw|tga)'
+        links=soup.find_all('img',attrs={'data-imgurl':re.compile(img_reg)})
+        return links
+        
+    def get_original_image(html):
+        soup = BeautifulSoup(html,                      #HTML文档字符串
+                             'html.parser',                  #HTML解析器 
+                              )
+        img_reg='(.*)\.(jpg|bmp|gif|ico|pcx|jpeg|tif|png|raw|tga)'
+        links=soup.find_all('img',attrs={'data-imgurl':re.compile(img_reg)})
+        return links
+    
+    def get_links(html):
+        links = re.findall('"objURL":"(.*?)",',html,re.S)
+        return links
+        
     def get_html(url):
         options = webdriver.FirefoxOptions()
-        options.set_headless()
-        # start web browser
-        browser=webdriver.Firefox(options=options)
-        # get source code
-        browser.get(url)
+        options.headless=True
         
-        # 按5次PAGE_DWON键，缓存5页的图像
-        for i in range(5):
-            webdriver.ActionChains(browser).send_keys(Keys.PAGE_DOWN).perform()
-            time.sleep(1)
-        html = browser.page_source
-        # close web browser
-        browser.close()
+        with webdriver.Firefox(options=options) as driver:
+            # get source code
+            driver.get(url)
+            html=driver.page_source
+            # 按5次PAGE_DWON键，缓存5页的图像
+            for i in range(5):
+                webdriver.ActionChains(driver).send_keys(Keys.PAGE_DOWN).perform()
+                time.sleep(1)
+                html=driver.page_source
+                n=len(get_links(html))
+                print(n)
+            html = driver.page_source
+        
         return html
-        
-    def parse_html(url,name,attrs):
-        html_doc=get_html(url)
-        soup = BeautifulSoup(html_doc,                      #HTML文档字符串
-                             'html.parser',                  #HTML解析器
-                             from_encoding = 'utf-8'         #HTML文档编码 
-                              )
-        
-        links=soup.find_all(name,attrs=attrs)
-            
-        if len(links) == 0:
-            warnings.warn('#cannot find target link '+'*'*30)
-            return ''
-        else:
-            return links
-    img_reg='(.*)\.(jpg|bmp|gif|ico|pcx|jpeg|tif|png|raw|tga)'
-    attrs={'data-imgurl':re.compile(img_reg)}
-    links=parse_html(url,'img',attrs)
+    
+    html=get_html(url)
+    links=get_links(html)
+    print(html)
     links=[l['data-imgurl'] for l in links]
     return links
     
@@ -157,7 +165,7 @@ def baidu_download(url, output_dir='.', stream_type=None, merge=True, info_only=
             download_urls([real_url], title, ext, size,
                           output_dir, url, merge=merge, faker=True)
             
-    elif re.match(r'https?://pic.baidu.com',url):
+    elif re.match(r'https?://(pic|image).baidu.com',url):
         real_urls=baidu_download_picture(url)
         for link in real_urls:
             print(link)
@@ -166,7 +174,7 @@ def baidu_download(url, output_dir='.', stream_type=None, merge=True, info_only=
             html = get_html(link)
             title = r1(r'title:"([^"]+)"', html)
             title=str(time.time()) if title is None else title
-            print_info('pic.baidu.com', title, ext, size)
+            print_info('image.baidu.com', title, ext, size)
             if not info_only:
                 download_urls([link], title, ext, size,
                               output_dir, url, merge=merge, faker=True)
