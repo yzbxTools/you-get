@@ -1551,6 +1551,14 @@ def script_main(download, download_playlist, **kwargs):
 
     download_grp.add_argument('--stream', help=argparse.SUPPRESS)
     download_grp.add_argument('--itag', help=argparse.SUPPRESS)
+    download_grp.add_argument('--keyword',type=str,default=None,
+                              help='download image keyword for image.baidu.com')
+    download_grp.add_argument('--downpage_num',type=int,default=10,
+                              help='download image page number for image.baidu.com')
+    download_grp.add_argument('--height',type=int,default=900,
+                              help='download image height for image.baidu.com')
+    download_grp.add_argument('--width',type=int,default=1600,
+                              help='download image width for image.baidu.com')
 
     parser.add_argument('URL', nargs='*', help=argparse.SUPPRESS)
 
@@ -1643,6 +1651,10 @@ def script_main(download, download_playlist, **kwargs):
             extra['extractor_proxy'] = extractor_proxy
         if stream_id:
             extra['stream_id'] = stream_id
+        extra['downpage_num']=args.downpage_num
+        extra['keyword']=args.keyword
+        extra['height']=args.height
+        extra['width']=args.width
         download_main(
             download, download_playlist,
             URLs, args.playlist,
