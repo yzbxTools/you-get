@@ -9,6 +9,7 @@ from urllib import parse,request
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 import time
+from urllib.parse import unquote
 from ..common import *
 from .embed import *
 from .universal import *
@@ -107,25 +108,10 @@ def baidu_download_album(aid, output_dir='.', merge=True, info_only=False):
 
         track_nr += 1
 
-def baidu_download_picture(url):
-    def get_thumbnail_links(html):
-            soup = BeautifulSoup(html,                      #HTML文档字符串
-                             'html.parser',                  #HTML解析器 
-                              )
-        img_reg='(.*)\.(jpg|bmp|gif|ico|pcx|jpeg|tif|png|raw|tga)'
-        links=soup.find_all('img',attrs={'data-imgurl':re.compile(img_reg)})
-        return links
-        
-    def get_original_image(html):
-        soup = BeautifulSoup(html,                      #HTML文档字符串
-                             'html.parser',                  #HTML解析器 
-                              )
-        img_reg='(.*)\.(jpg|bmp|gif|ico|pcx|jpeg|tif|png|raw|tga)'
-        links=soup.find_all('img',attrs={'data-imgurl':re.compile(img_reg)})
-        return links
-    
+def baidu_download_picture(url,downpage_num=10,keyword=None,height=0,width=0,**kwargs):
     def get_links(html):
-        links = re.findall('"objURL":"(.*?)",',html,re.S)
+        links=re.findall('objurl=(http.*?\.jpg)',html,re.S)
+        links+=re.findall('data-objurl="(http.*?\.jpg)"',html,re.S)
         return links
         
     def get_html(url):
@@ -136,21 +122,22 @@ def baidu_download_picture(url):
             # get source code
             driver.get(url)
             html=driver.page_source
-            # 按5次PAGE_DWON键，缓存5页的图像
-            for i in range(5):
+            # 按downpage_num次PAGE_DWON键，缓存downpage_num页的图像
+            for i in range(downpage_num):
                 webdriver.ActionChains(driver).send_keys(Keys.PAGE_DOWN).perform()
                 time.sleep(1)
                 html=driver.page_source
-                n=len(get_links(html))
-                print(n)
+                #n=len(get_links(html))
+                #print(n)
             html = driver.page_source
-        
         return html
-    
+    if keyword is not None:
+        height_str=str(height) if height>0 else ''
+        width_str=str(width) if width>0 else ''
+        url='https://image.baidu.com/search/index?tn=baiduimage&ie=utf-8&word=%s&ct=201326592&v=flip&height=%s&width=%s'%(parse.quote(keyword),height_str,width_str)
+        print('generate url:',url)
     html=get_html(url)
     links=get_links(html)
-    print(html)
-    links=[l['data-imgurl'] for l in links]
     return links
     
 
@@ -166,18 +153,31 @@ def baidu_download(url, output_dir='.', stream_type=None, merge=True, info_only=
                           output_dir, url, merge=merge, faker=True)
             
     elif re.match(r'https?://(pic|image).baidu.com',url):
-        real_urls=baidu_download_picture(url)
-        for link in real_urls:
+        real_urls=baidu_download_picture(url,**kwargs)
+        for idx,link in enumerate(real_urls):
+            link=unquote(link)
             print(link)
-            type, ext, size = url_info(link, faker=True)
-            print(type,ext,size)
-            html = get_html(link)
-            title = r1(r'title:"([^"]+)"', html)
-            title=str(time.time()) if title is None else title
-            print_info('image.baidu.com', title, ext, size)
-            if not info_only:
-                download_urls([link], title, ext, size,
-                              output_dir, url, merge=merge, faker=True)
+            try:
+                #type, ext, size = url_info(link, faker=True)
+                type='image/jpeg'
+                ext='jpg'
+                size=url_size(link,faker=True)
+                
+                html = get_content(url)
+                title = r1(r'title:"([^"]+)"', html)
+            except:
+                print('*'*10,link)
+                continue
+            else:
+                if size == 0:
+                    print('*'*10,link)
+                    continue
+                print(type,ext,size)
+                title=str(idx) if title is None else title
+                print_info('image.baidu.com', title, ext, size)
+                if not info_only:
+                    download_urls([link], title, ext, size,
+                                  output_dir, url, merge=merge, faker=True)
             
     elif re.match(r'https?://music.baidu.com/album/\d+', url):
         id = r1(r'https?://music.baidu.com/album/(\d+)', url)
